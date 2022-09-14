@@ -1,0 +1,190 @@
+---
+title: "Exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. "
+author: "Alireza Haddadi"
+date: "9/14/2022"
+output: html_document
+---
+
+## Synopsis
+
+This is the assignment for a Coursera course Reproducible Research. A quote from text of the assignment.
+
+“Storms and other severe weather events can cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such outcomes to the extent possible is a key concern.
+
+This project involves exploring the U.S. National Oceanic and Atmospheric Administration’s (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage."
+
+
+### Data
+
+The data for this assignment come in the form of a comma-separated-value file compressed via the bzip2 algorithm to reduce its size. You can download the file from the course web site:
+
+* [Storm Data](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2) [47Mb]
+
+There is also some documentation of the database available. Here you will find how some of the variables are constructed/defined.
+
+* National Weather Service [Storm Data Documentation](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf)
+
+* National Climatic Data Center Storm Events [FAQ](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf)
+
+The events in the database start in the year 1950 and end in November 2011. In the earlier years of the database there are generally fewer events recorded, most likely due to a lack of good records. More recent years should be considered more complete.
+
+## Data Processing
+
+### Preprocessing
+
+Needed libraries:
+```{r, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(R.utils)
+library(data.table)
+```
+
+
+The data was downloaded and stored in `data` variable.
+```{r, cache = TRUE}
+file_url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+
+csv.bz2_file <- ".\\StormData.csv.bz2"
+
+if (!file.exists(csv.bz2_file)) {
+        download.file(file_url, destfile = csv.bz2_file, mode = 'wb')
+        date_download <- date() 
+}
+NeededColumns <- c("EVTYPE", "FATALITIES", "INJURIES", "CROPDMG", "CROPDMGEXP", "PROPDMG", "PROPDMGEXP")
+data <- fread(csv.bz2_file,stringsAsFactors = FALSE, select = NeededColumns)
+```
+
+### Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
+
+There are two types of casualties in the data (i.e FATALITIES and INJURIES), so this data is sumed up to build a graph.
+
+```{r, cache = TRUE}
+harmful <- data %>% group_by(EVTYPE) %>% 
+        summarise(FATALITIES = sum(FATALITIES),INJURIES = sum(INJURIES)) %>% 
+        arrange(desc(FATALITIES + INJURIES))%>%
+        slice(1:5)%>%
+        gather(CasualtyType, Number, c(FATALITIES, INJURIES))
+```
+
+This processed data is separated based on `FATALITIES` and `INJURIES`.
+
+```{r, cache = TRUE}
+FATALITIES <- subset(harmful, CasualtyType == "FATALITIES") 
+INJURIES <- subset(harmful, CasualtyType == "INJURIES") 
+```
+
+In this article ploting two separate plot is prefered, therefore the graph is plotted with `ggplot` package.
+
+```{r, cache = TRUE}
+ggplot(data = FATALITIES, aes(x = reorder(EVTYPE, -Number), y = Number, fill = reorder(EVTYPE, -Number))) + 
+        geom_bar(stat = 'identity') +
+        geom_text(aes(label = Number), vjust = 1.6, color = "white", size = 4) +
+        scale_fill_grey() +
+        labs(title = "The 5-top Events Casualty", subtitle = "Based In Fatalities", x = "The event type", y = "Number of hurted people", fill = "Events") +
+        theme_classic() +
+        theme(axis.text.x = element_text(angle = 30, vjust = 0.5, hjust = 0.5),
+              plot.title = element_text(size = 14, face = "bold"),
+              plot.subtitle = element_text(size = 12))
+        
+```
+
+It can be seen from the graph that "Tornadoes" and "Excessive Heat" are the most dangerous events for fatality casualties in U.S.
+
+
+```{r, cache = TRUE}
+ggplot(data = INJURIES, aes(x = reorder(EVTYPE, -Number), y = Number, fill = reorder(EVTYPE, -Number))) + 
+        geom_bar(stat = 'identity') +
+        geom_text(aes(label = Number), vjust = 1.6, color = "white", size = 4) +
+        scale_fill_grey() +
+        labs(title = "The 5-top Events Casualty", subtitle = "Based In Injuries", x = "The event type", y = "Number of hurted people", fill = "Events") +
+        theme_classic() +
+        theme(axis.text.x = element_text(angle = 30, vjust = 0.5, hjust = 0.5),
+              plot.title = element_text(size = 14, face = "bold"),
+              plot.subtitle = element_text(size = 12))
+```
+
+It can be seen from the graph that “Tornadoes” and “TSTM Wind” are the most dangerous events for injury casualties in U.S. 
+ 
+### Across the United States, which types of events have the greatest economic consequences? 
+
+Economic consequences are property damage (PROPDMG in database) and crops damage (CROPDMG in database), thus the data is processed for the analysis.
+
+The database doesn’t contain proper values of economic damage, but pairs of a value (RPOPDMG, CROPDMG) and it’s exponent (PROPDMGEXP, CROPDMGEXP). We need to transform them to simple numeric values. We use numeric exponents as they are. For alphabetic characters in exponents we use rules: ‘b’ and ‘B’ stand for billion, ‘m’ and ‘M’ for million, ‘k’ and ‘K’ for thousand, ‘h’ and ‘H’ for hundred (page 12 of Storm Data Documentation). Also we calculate values in millions for convenience.
+
+```{r, warning=FALSE, cache=TRUE}
+PD <- data$PROPDMG
+PDE <- data$PROPDMGEXP
+CD <- data$CROPDMG
+CDE <- data$CROPDMGEXP
+
+NPDE <- as.numeric(PDE)
+NCDE <- as.numeric(CDE)
+
+
+PD[PDE %in% "B"] <- PD[PDE %in% "B"] * 1e9
+PD[PDE %in% c("M", "m")] <- PD[PDE %in% c("M", "m")] * 1e6
+PD[PDE %in% "K"] <- PD[PDE %in% "K"] * 1e3
+PD[PDE %in% c("H", "h")] <- PD[PDE %in% c("H", "h")] * 1e2
+
+CD[CDE %in% "B"] <- CD[CDE %in% "B"] * 1e9
+CD[CDE %in% c("M", "m")] <- CD[CDE %in% c("M", "m")] * 1e6
+CD[CDE %in% "K"] <- CD[CDE %in% "K"] * 1e3
+CD[CDE %in% c("H", "h")] <- CD[CDE %in% c("H", "h")] * 1e2
+
+data$PROPDMG <- PD
+data$CROPDMG <- CD
+
+```
+
+The data is aggregate by event type.
+
+```{r, cache = TRUE}
+damage <- data %>% 
+        select(-c(CROPDMGEXP, PROPDMGEXP)) %>%
+        group_by(EVTYPE) %>%
+        summarise(PROPDMG = sum(PROPDMG), CROPDMG = sum(CROPDMG)) %>%
+        arrange(desc(PROPDMG + CROPDMG)) %>% 
+        slice(1:4) %>%
+        gather(TYPE, VALUE, CROPDMG:PROPDMG)
+
+damage[, "VALUE"] <- log(damage[, "VALUE"], exp(1))
+
+CROPDMG <- subset(damage, TYPE == "CROPDMG") 
+PROPDMG <- subset(damage, TYPE == "PROPDMG")
+```
+
+The result for this data aggregation is plotted here:
+
+```{r, cache = TRUE}
+ggplot(data = CROPDMG, aes(x = reorder(EVTYPE, -VALUE), y = VALUE, fill = reorder(EVTYPE, VALUE))) + 
+        geom_bar(stat = 'identity') +
+        scale_fill_brewer(palette = "Oranges") +
+        labs(title = "The 4-top Events Damage In Log", subtitle = "To Corps", x = "The event type", y = "Number of hurted people", fill = "Events") +
+        theme_classic() +
+        theme(axis.text.x = element_text(angle = 30, vjust = 0.5, hjust = 0.5),
+              plot.title = element_text(size = 14, face = "bold"),
+              plot.subtitle = element_text(size = 12))
+```
+
+This can be concluded in Log based graph "Flood"s give serious damage to Corps of U.S.
+
+```{r, cache = TRUE}
+ggplot(data = PROPDMG, aes(x = reorder(EVTYPE, -VALUE), y = VALUE, fill = reorder(EVTYPE, VALUE))) + 
+        geom_bar(stat = 'identity') +
+        scale_fill_brewer(palette = "Oranges") +
+        labs(title = "The 4-top Events Damage In Log", subtitle = "To Products", x = "The event type", y = "Number of hurted people", fill = "Events") +
+        theme_classic() +
+        theme(axis.text.x = element_text(angle = 30, vjust = 0.5, hjust = 0.5),
+              plot.title = element_text(size = 14, face = "bold"),
+              plot.subtitle = element_text(size = 12))
+```
+
+Although these 4 events have approximately equal damage to the Products, The graph shows that "Flood"s resulted much more damage to Products of U.S.
+
+## Results
+
+1. **Tornado** is the most harmful weather event in the U.S with respect to population health.
+
+2. **Floods** have the greatest economic consequences in the U.S.
