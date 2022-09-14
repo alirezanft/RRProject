@@ -151,37 +151,25 @@ damage <- data %>%
 
 damage[, "VALUE"] <- log(damage[, "VALUE"], exp(1))
 
-CROPDMG <- subset(damage, TYPE == "CROPDMG") 
-PROPDMG <- subset(damage, TYPE == "PROPDMG")
 ```
 
 The result for this data aggregation is plotted here:
 
-```{r, cache = TRUE}
-ggplot(data = CROPDMG, aes(x = reorder(EVTYPE, -VALUE), y = VALUE, fill = reorder(EVTYPE, VALUE))) + 
+```{r, cache = FALSE}
+ggplot(data = damage, aes(x = reorder(EVTYPE, -VALUE), y = VALUE, fill = reorder(EVTYPE, VALUE))) + 
         geom_bar(stat = 'identity') +
         scale_fill_brewer(palette = "Oranges") +
-        labs(title = "The 4-top Events Damage In Log", subtitle = "To Corps", x = "The event type", y = "Number of hurted people", fill = "Events") +
+        labs(title = "The 4-top Events Damage In Log", subtitle = "To Corps and products", x = "The event type", y = "Number of hurted people", fill = "Events") +
         theme_classic() +
+        facet_grid(~ TYPE) +
         theme(axis.text.x = element_text(angle = 30, vjust = 0.5, hjust = 0.5),
               plot.title = element_text(size = 14, face = "bold"),
               plot.subtitle = element_text(size = 12))
 ```
 
-This can be concluded in Log based graph "Flood"s give serious damage to Corps of U.S.
+This can be concluded in Log based graph "Flood"s give serious damage to Corps and products of U.S.
 
-```{r, cache = TRUE}
-ggplot(data = PROPDMG, aes(x = reorder(EVTYPE, -VALUE), y = VALUE, fill = reorder(EVTYPE, VALUE))) + 
-        geom_bar(stat = 'identity') +
-        scale_fill_brewer(palette = "Oranges") +
-        labs(title = "The 4-top Events Damage In Log", subtitle = "To Products", x = "The event type", y = "Number of hurted people", fill = "Events") +
-        theme_classic() +
-        theme(axis.text.x = element_text(angle = 30, vjust = 0.5, hjust = 0.5),
-              plot.title = element_text(size = 14, face = "bold"),
-              plot.subtitle = element_text(size = 12))
-```
 
-Although these 4 events have approximately equal damage to the Products, The graph shows that "Flood"s resulted much more damage to Products of U.S.
 
 ## Results
 
